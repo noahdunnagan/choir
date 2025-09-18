@@ -1,10 +1,21 @@
-use async_openai::{config::OpenAIConfig, types::{CategoryScore, ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent, ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent, ChatCompletionTool, ChatCompletionToolType, CreateChatCompletionRequest, CreateModerationRequestArgs, FunctionObject, ResponseFormat, ResponseFormatJsonSchema}, Client};
-use std::{sync::Arc, collections::HashMap};
-use crate::config::EnvConfig;
 use crate::ai_functions::{get_all_functions, AIFunction};
-use tokio::sync::Semaphore;
-use serde_json::Value;
+use crate::config::EnvConfig;
 use crate::Error;
+use async_openai::{
+    config::OpenAIConfig,
+    types::{
+        CategoryScore, ChatCompletionRequestAssistantMessage,
+        ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
+        ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent,
+        ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent,
+        ChatCompletionTool, ChatCompletionToolType, CreateChatCompletionRequest,
+        CreateModerationRequestArgs, FunctionObject, ResponseFormat, ResponseFormatJsonSchema,
+    },
+    Client,
+};
+use serde_json::Value;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Semaphore;
 
 pub struct OpenAIService {
     pub(crate) client: Arc<Client<OpenAIConfig>>,
@@ -14,7 +25,6 @@ pub struct OpenAIService {
 
 impl Clone for OpenAIService {
     fn clone(&self) -> Self {
-        // Reinitialize functions since they can't be cloned
         let mut functions: HashMap<String, Box<dyn AIFunction>> = HashMap::new();
         for function in get_all_functions() {
             functions.insert(function.name().to_string(), function);
@@ -29,21 +39,19 @@ impl Clone for OpenAIService {
 }
 
 impl OpenAIService {
-    pub async fn new() -> Self {
-        let config = EnvConfig::from_env();
-        let openai_config = OpenAIConfig::new().with_api_key(config.keys.oai);
+    pub async fn new(config: Arc<EnvConfig>) -> Self {
+        let openai_config = OpenAIConfig::new().with_api_key(config.oai_key.clone());
         let client = Client::with_config(openai_config);
 
         let semaphore = Arc::new(Semaphore::new(15));
 
-        // Initialize available functions
         let mut functions: HashMap<String, Box<dyn AIFunction>> = HashMap::new();
         for function in get_all_functions() {
             functions.insert(function.name().to_string(), function);
         }
 
-        Self { 
-            client: Arc::new(client), 
+        Self {
+            client: Arc::new(client),
             semaphore,
             functions,
         }
@@ -88,13 +96,11 @@ impl OpenAIService {
         };
 
         let resp = self.client.chat().create(req).await?;
-        Ok(resp
-            .choices
+        resp.choices
             .get(0)
             .and_then(|c| c.message.content.clone())
-            .unwrap_or_default())
+            .ok_or_else(|| "No content in response".into())
     }
-    
 
     pub fn get_function_tools(&self) -> Vec<ChatCompletionTool> {
         self.functions
@@ -104,10 +110,13 @@ impl OpenAIService {
                 let mut required = Vec::new();
 
                 for (param_name, param) in func.parameters() {
-                    properties.insert(param_name.clone(), serde_json::json!({
-                        "type": param.param_type,
-                        "description": param.description
-                    }));
+                    properties.insert(
+                        param_name.clone(),
+                        serde_json::json!({
+                            "type": param.param_type,
+                            "description": param.description
+                        }),
+                    );
 
                     if param.required {
                         required.push(param_name);
@@ -125,7 +134,7 @@ impl OpenAIService {
                             "required": required
                         })),
                         strict: None,
-                    }
+                    },
                 }
             })
             .collect()
@@ -133,7 +142,7 @@ impl OpenAIService {
 
     pub async fn process_openai_interactive(
         &self,
-        _conversation_id: uuid::Uuid, // Remnants from DB integrations
+        _conversation_id: uuid::Uuid,
         prompt: &str,
     ) -> Result<String, Error> {
         let chat = self.client.chat();
@@ -142,28 +151,34 @@ impl OpenAIService {
             Cut, to the point, and concise. Do not repeat yourself.
         "#;
 
-        let mut messages = vec![
-            ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
+        let mut messages = vec![ChatCompletionRequestMessage::System(
+            ChatCompletionRequestSystemMessage {
                 content: ChatCompletionRequestSystemMessageContent::Text(sys.to_string()),
                 name: None,
-            }),
-        ];
+            },
+        )];
 
-        messages.push(ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-            content: Some(ChatCompletionRequestAssistantMessageContent::Text(prompt.to_string())),
-            name: None,
-            tool_calls: None,
-            audio: None,
-            refusal: None,
-            ..Default::default()
-        }));
+        messages.push(ChatCompletionRequestMessage::Assistant(
+            ChatCompletionRequestAssistantMessage {
+                content: Some(ChatCompletionRequestAssistantMessageContent::Text(
+                    prompt.to_string(),
+                )),
+                name: None,
+                tool_calls: None,
+                audio: None,
+                refusal: None,
+                ..Default::default()
+            },
+        ));
 
-        let mut response = chat.create(CreateChatCompletionRequest {
-            model: "gpt-4o".to_owned(),
-            messages: messages.clone(),
-            tools: Some(tools),
-            ..Default::default()
-        }).await?;
+        let mut response = chat
+            .create(CreateChatCompletionRequest {
+                model: "gpt-4o".to_owned(),
+                messages: messages.clone(),
+                tools: Some(tools),
+                ..Default::default()
+            })
+            .await?;
 
         // Handle function calls
         while let Some(choice) = response.choices.first() {
@@ -171,29 +186,31 @@ impl OpenAIService {
                 // Add the assistant's message with function calls
                 messages.push(ChatCompletionRequestMessage::Assistant(
                     ChatCompletionRequestAssistantMessage {
-                        content: choice.message.content.clone().map(|c| ChatCompletionRequestAssistantMessageContent::Text(c)),
+                        content: choice
+                            .message
+                            .content
+                            .clone()
+                            .map(|c| ChatCompletionRequestAssistantMessageContent::Text(c)),
                         name: None,
                         tool_calls: Some(tool_calls.clone()),
                         audio: None,
                         refusal: None,
                         ..Default::default()
-                    }
+                    },
                 ));
 
                 // Execute each function call
                 for tool_call in tool_calls {
                     let function = &tool_call.function;
                     let function_name = &function.name;
-                    let arguments: HashMap<String, Value> = serde_json::from_str(&function.arguments)
-                        .unwrap_or_default();
+                    let arguments: HashMap<String, Value> =
+                        serde_json::from_str(&function.arguments)?;
 
                     let result = match self.functions.get(function_name) {
-                        Some(func) => {
-                            match func.execute(arguments).await {
-                                Ok(result) => serde_json::to_string(&result)?,
-                                Err(e) => format!("Error: {}", e),
-                            }
-                        }
+                        Some(func) => match func.execute(arguments).await {
+                            Ok(result) => serde_json::to_string(&result)?,
+                            Err(e) => format!("Error: {}", e),
+                        },
                         None => format!("Function '{}' not found", function_name),
                     };
 
@@ -202,28 +219,33 @@ impl OpenAIService {
                         ChatCompletionRequestToolMessage {
                             content: ChatCompletionRequestToolMessageContent::Text(result),
                             tool_call_id: tool_call.id.clone(),
-                        }
+                        },
                     ));
                 }
 
                 // Get the next response
-                response = chat.create(CreateChatCompletionRequest {
-                    model: "gpt-4.1".to_owned(),
-                    messages: messages.clone(),
-                    tools: Some(self.get_function_tools()),
-                    ..Default::default()
-                }).await?;
+                response = chat
+                    .create(CreateChatCompletionRequest {
+                        model: "gpt-4.1".to_owned(),
+                        messages: messages.clone(),
+                        tools: Some(self.get_function_tools()),
+                        ..Default::default()
+                    })
+                    .await?;
             } else {
                 break;
             }
         }
 
         // Function calls are done so get the final response.
-        
-        let response_content = response.choices[0].message.content.clone().unwrap_or_else(|| "LLM failed to respond.".to_string());
-        
+        let response_content = response.choices[0]
+            .message
+            .content
+            .clone()
+            .ok_or_else(|| "LLM failed to respond.")?;
+
         Ok(response_content)
     }
 
-    // ^ will integrate hashmap 15 message limit for future.
+    // ^ will integrate hashmap 15 message limit for future but this was just a quick project so meh
 }

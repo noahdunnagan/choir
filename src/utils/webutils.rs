@@ -1,8 +1,7 @@
-use actix_web::{HttpRequest, HttpResponse};
-use crate::config::{EnvConfig};
-use crate::config::PermissionLevel;
-use crate::config;
+use crate::config::EnvConfig;
 use crate::response;
+use actix_web::{web, HttpRequest, HttpResponse};
+use std::sync::Arc;
 use urlencoding;
 
 pub struct WebUtils;
@@ -11,66 +10,49 @@ impl WebUtils {
     // Extract the API key from the request headers
 
     pub fn extract_api_key(req: &HttpRequest) -> Option<String> {
-    req.headers()
-        .get("Authorization")
-        .and_then(|header| header.to_str().ok())
-        .and_then(|value| {
-            value.strip_prefix("Bearer ")
-                .or_else(|| value.strip_prefix("Bearer%20"))
-        })
-        .map(|s| s.to_string())
-        .map(|s| s.to_string())
+        req.headers()
+            .get("Authorization")
+            .and_then(|header| header.to_str().ok())
+            .and_then(|value| {
+                value
+                    .strip_prefix("Bearer ")
+                    .or_else(|| value.strip_prefix("Bearer%20"))
+            })
+            .map(|s| s.to_string())
     }
 
     // Check the api key against the configured api key.
 
-    pub fn check_api_key(req: &HttpRequest, required: PermissionLevel) -> bool {
-        // Public routes are always open
-        if required == PermissionLevel::Public {
-            return true;
-        }
+    pub fn check_api_key(req: &HttpRequest) -> bool {
+        let cfg = match req.app_data::<web::Data<Arc<EnvConfig>>>() {
+            Some(cfg) => cfg.get_ref().clone(),
+            None => return false,
+        };
 
-        let cfg = EnvConfig::from_env();
         let token = match Self::extract_api_key(req) {
             Some(t) => t,
             None => return false,
         };
 
-        // Figure out which ring the client key belongs to
-        let client = if token == cfg.keys.ring0 {
-            PermissionLevel::Ring0
-        } else if token == cfg.keys.ring1 {
-            PermissionLevel::Ring1
-        } else if token == cfg.keys.ring2 {
-            PermissionLevel::Ring2
-        } else {
-            return false;
-        };
-
-        // Allow if client ring is at least as privileged as required
-        client <= required
+        token == cfg.api_key
     }
 
-    pub fn require_api_key(
-        req: &HttpRequest,
-        level: config::PermissionLevel
-    ) -> Option<HttpResponse> {
-        if WebUtils::check_api_key(req, level) {
+    pub fn require_api_key(req: &HttpRequest) -> Option<HttpResponse> {
+        if WebUtils::check_api_key(req) {
             None
         } else {
             Some(
-                HttpResponse::Unauthorized().json(
-                    response::make_query_response::<()>(
-                        false,
-                        None,
-                        Some("Unauthorized"),
-                        None
-                    )
-                )
+                HttpResponse::Unauthorized().json(response::make_query_response::<()>(
+                    false,
+                    None,
+                    Some("Unauthorized"),
+                    None,
+                )),
             )
         }
     }
 
+    #[allow(dead_code)]
     pub fn decode_all(input: &str) -> Option<String> {
         urlencoding::decode(input).ok().map(|cow| cow.into_owned())
     }

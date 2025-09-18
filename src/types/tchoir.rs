@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
+use schemars::{schema_for, JsonSchema};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use schemars::{JsonSchema, schema_for};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChoirRequest {
@@ -8,7 +8,7 @@ pub struct ChoirRequest {
     pub json_schema: Option<Value>,
 }
 
-// Agent response. 
+// Agent response.
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct ChoirAgentResponse {
     /// The agent's response in detail. Extremely detailed.
@@ -27,10 +27,11 @@ pub fn get_choir_agent_response_schema() -> Value {
 impl ChoirAgentResponse {
     pub fn empty() -> Self {
         Self {
-            detailed_response: "Agent failed while generating. Discount them from processing.".to_string(),
-            short_overview: "Agent failed while generating. Discount them from processing.".to_string(),
+            detailed_response: "Agent failed while generating. Discount them from processing."
+                .to_string(),
+            short_overview: "Agent failed while generating. Discount them from processing."
+                .to_string(),
             thoughts: "Agent failed while generating. Discount them from processing.".to_string(),
-            
         }
     }
 }

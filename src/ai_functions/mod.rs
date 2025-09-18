@@ -1,7 +1,7 @@
+use crate::Error;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
-use crate::Error;
 
 #[async_trait]
 pub trait AIFunction: Send + Sync {
@@ -29,9 +29,11 @@ impl AIFunctionParameter {
 }
 
 pub mod get_weather;
+pub mod website_to_md;
 
 pub fn get_all_functions() -> Vec<Box<dyn AIFunction>> {
     vec![
         Box::new(get_weather::GetWeatherFunction),
+        Box::new(website_to_md::WebsiteToMdFunction),
     ]
 }

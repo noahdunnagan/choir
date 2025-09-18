@@ -1,91 +1,73 @@
-# Rust API Template
+# Choir - Multi-Agent AI Analysis System
 
-A generic Rust API template with a database connection.
+> Preface
 
----
+This project is months old and just my "lets do something to learn a random thing! project. I 100% didn't employ best pracitces in certain places but I'm alright with that.
 
-🔑 Authentication
-
-All endpoints require a valid API key via the Authorization header.
-
-| Key                  | Location | Type    | Required | Description                         |
-|----------------------|----------|---------|----------|-------------------------------------|
-| Authorization        | Header   | string  | Yes      | `Bearer <API_KEY>`                  |
-| Content-Type         | Header   | string  | Yes      | `application/json`                  |
-
----
-🌐 Base URL
-
-http://localhost:8081/
+In timeline of "how I want projects to look" this is in phase 1. "Okay it works and does what I want. Next is to make it look pretty then finally optimize."
 
 
----
 
-📦 Data Models
+## Now, what is Choir?
 
-Item
-```json
-{
-  "id": "string",
-  "name": "string",
-  "created_at": "ISO8601 timestamp",
-  "updated_at": "ISO8601 timestamp"
-}
+
+Choir is a Rust-powered API that uses multiple AI agents to analyze complex queries. It can fetch webpage content and coordinate 5 specialized AI agents to provide comprehensive analysis from different perspectives.
+
+## How It Works
+
+1. **Query Analysis**: Detects URLs in your query and fetches their content using Firecrawl
+2. **Task Master**: Creates 5 distinct analytical approaches for your query
+3. **Agent Coordination**: Deploys 5 specialized AI agents (Direct Analyst, Critical Evaluator, Context Specialist, Creative Interpreter, Synthesis Expert)
+4. **Assessment**: A task master (chorus) evaluates all agent responses and provides the best synthesis
+5. **Final Summary**: Returns a clear, comprehensive answer to your original question
+
+## Quick Start
+
+### Prerequisites
+- Rust (latest stable)
+- OpenAI API key
+- Firecrawl API key
+
+### Environment Setup
+Create a `.env` file:
 ```
-CreateItem
-```json
-{
-  "name": "string"
-}
-```
-UpdateItem
-
-All fields optional; provide only the properties you want to modify.
-```json
-{
-  "name": "string?"
-}
+PORT=8081
+API_KEY=your-api-key-here (bearer auth for requests)
+OAI_KEY=your-openai-api-key
+FC_KEY=your-firecrawl-api-key
 ```
 
----
+### Run Locally
+```bash
+cargo run
+```
 
-📋 Endpoints
+### Test It Out
+```bash
+curl -X POST http://localhost:8081/choir \
+  -H "Authorization: Bearer your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is the George Lucas quote used here? https://noahdunnagan.com/thoughts/design"
+  }'
+```
 
-1. Create Item
-	•	Method: POST
-	•	Path: /item/create
-	•	Permission Level: Ring1
+## API Endpoints
 
-2. Update Item
-	•	Method: POST
-	•	Path: /item/update/{id}
-	•	Permission Level: Ring1
+### Choir Analysis
+- **Method**: POST
+- **Path**: `/choir`
+- **Auth**: Bearer token required
 
-3. Delete Item
-	•	Method: DELETE
-	•	Path: /item/{id}
-	•	Permission Level: Ring1
+**Request Body**:
+```json
+{
+  "query": "Your question or analysis request",
+  "json_schema": null
+}
+```
 
-4. List All Items
-	•	Method: GET
-	•	Path: /item
-	•	Permission Level: Ring2
-
-5. Get Item by ID
-	•	Method: GET
-	•	Path: /item/{id}
-	•	Permission Level: Ring2
-
----
-
-💬 Standard Response Format
-
-| Field    | Type        | Description                                 |
-|----------|-------------|---------------------------------------------|
-| success  | boolean     | Indicates if the request succeeded          |
-| data     | object/null | The response payload (or null)              |
-| error    | string/null | Error code if `success` is false            |
-| message  | string      | Human-readable status message               |
-
-
----
+**Example Queries**:
+- Analyze websites: `"What are the main points in https://example.com/article?"`
+- Complex questions: `"Compare the pros and cons of different approaches to..."`
+- Research tasks: `"What can you tell me about..."`

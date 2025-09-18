@@ -1,19 +1,17 @@
-use actix_web::{get, HttpResponse, web};
 use crate::modules::openai::OpenAIService;
 use crate::require_api_key;
 use crate::response;
-use crate::config;
-use async_openai::types::{ChatCompletionRequestMessage, ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent, ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent};
-use schemars::{JsonSchema, schema_for};
-
-const PERMISSION_LEVEL: config::PermissionLevel = config::PermissionLevel::Public;
+use actix_web::{get, web, HttpResponse};
+use async_openai::types::{
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+    ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessage,
+    ChatCompletionRequestUserMessageContent,
+};
+use schemars::{schema_for, JsonSchema};
 
 #[get("")]
-async fn health(
-    req: actix_web::HttpRequest,
-    data: web::Data<OpenAIService>
-) -> HttpResponse {
-    require_api_key!(&req, PERMISSION_LEVEL);
+async fn health(req: actix_web::HttpRequest, data: web::Data<OpenAIService>) -> HttpResponse {
+    require_api_key!(&req);
 
     #[derive(serde::Serialize, serde::Deserialize, JsonSchema)]
     struct HealthSchema {
@@ -43,12 +41,10 @@ async fn health(
 
     println!("{:?}", d);
 
-    HttpResponse::Ok().json(
-        response::make_query_response(
-            true,
-            Some(&"Endpoints are healthy!"),
-            None,
-            Some("Server is healthy!")
-        )
-    )
+    HttpResponse::Ok().json(response::make_query_response(
+        true,
+        Some(&"Endpoints are healthy!"),
+        None,
+        Some("Server is healthy!"),
+    ))
 }

@@ -1,8 +1,23 @@
+use super::{AIFunction, AIFunctionParameter};
+use crate::Error;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use crate::Error;
-use super::{AIFunction, AIFunctionParameter};
+
+#[derive(Deserialize)]
+struct GetWeatherArgs {
+    location: String,
+    units: Option<String>,
+}
+
+#[derive(Serialize)]
+struct GetWeatherResponse {
+    location: String,
+    units: String,
+    weather_data: String,
+    timestamp: String,
+}
 
 pub struct GetWeatherFunction;
 
@@ -20,30 +35,37 @@ impl AIFunction for GetWeatherFunction {
         let mut params = HashMap::new();
         params.insert(
             "location".to_string(),
-            AIFunctionParameter::new("string", "The location to get weather for (city, state/country)", true),
+            AIFunctionParameter::new(
+                "string",
+                "The location to get weather for (city, state/country)",
+                true,
+            ),
         );
         params.insert(
             "units".to_string(),
-            AIFunctionParameter::new("string", "Temperature units: celsius, fahrenheit, kelvin", false),
+            AIFunctionParameter::new(
+                "string",
+                "Temperature units: celsius, fahrenheit, kelvin",
+                false,
+            ),
         );
         params
     }
 
     async fn execute(&self, args: HashMap<String, Value>) -> Result<Value, Error> {
-        let location = args.get("location")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing required parameter: location")?;
+        let args: GetWeatherArgs =
+            serde_json::from_value(serde_json::Value::Object(args.into_iter().collect()))?;
 
-        let units = args.get("units")
-            .and_then(|v| v.as_str())
-            .unwrap_or("celsius");
-        let response = format!("Its currently 69dg {}. in {}", units, location);  // Placeholder, didnt bring over the perplexity api. 
-        
-        Ok(json!({
-            "location": location,
-            "units": units,
-            "weather_data": response,
-            "timestamp": chrono::Utc::now().to_rfc3339()
-        }))
+        let units = args.units.unwrap_or_else(|| "celsius".to_string());
+        let response_data = format!("Its currently 69dg {}. in {}", units, args.location); // Placeholder
+
+        let response = GetWeatherResponse {
+            location: args.location,
+            units,
+            weather_data: response_data,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+
+        Ok(json!(response))
     }
 }
