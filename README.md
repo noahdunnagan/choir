@@ -2,7 +2,7 @@
 
 > Preface
 
-This project is months old and just my "lets do something to learn a random thing! project. I 100% didn't employ best pracitces in certain places but I'm alright with that.
+This project is months old and just my "lets do something to learn a random thing!" project. I 100% didn't employ best pracitces in certain places but I'm alright with that.
 
 In timeline of "how I want projects to look" this is in phase 1. "Okay it works and does what I want. Next is to make it look pretty then finally optimize."
 
